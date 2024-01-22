@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <script src="https://unpkg.com/htmx.org@1.9.9" integrity="sha384-QFjmbokDn2DjBjq+fM+8LUIVrAgqcNW2s0PjAxHETgRn9l4fvX31ZxDxvwQnyMOX" crossorigin="anonymous"></script>
+    <!--    <script src="https://cdn.jsdelivr.net/npm/js-base64@3.7.4/base64.min.js"></script>-->
+    <title>Document</title>
+</head>
+<body>
+    <div>
+        <button id="create">
+            navigator.credentials.create
+        </button>
+
+        <button hx-get="/" hx-swap="outerHTML">
+            Click Me
+        </button>
+
+        <button id="get">
+            navigator.credentials.get
+        </button>
+    </div>
+</body>
+</html>
+
+<script>
+  const createBtn = document.getElementById('create');
+  const getBtn = document.getElementById('get');
+
+  createBtn.addEventListener('click', asyncFn);
+  getBtn.addEventListener('click', asyncGetFn);
+
+
+  async function asyncFn() {
+
+    // 1. challenge를 받아온다
+    const json = await (async () => {
+      const res = await fetch("/get_challenge", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+
+      return res.json();
+    })();
+
+    const ccr = json.publicKey
+
+    // challenge, id는 type 때문에 변환해줌
+    ccr.challenge = base64urlToUint8Array(ccr.challenge.value);
+    ccr.user.id = base64urlToUint8Array(ccr.user.id);
+
+    // 브라우저는 ccr을 받아서 navigator.credentials.create 호출해서 option으로 ccr 넣어서 다시 서버로 요청
+    const credential = await navigator.credentials.create({
+      publicKey: ccr
+    });
+
+    console.log("credential = ", credential);
+    console.log("credential.getClientExtensionResults() = ", credential.getClientExtensionResults());
+
+    const serializeable = {
+      attestationObject: bufferToBase64url(credential.response.attestationObject),
+      clientDataJSON: bufferToBase64url(credential.response.clientDataJSON),
+      clientExtensions: JSON.stringify(credential.getClientExtensionResults()),
+    };
+
+    console.log("serializeable = ", serializeable);
+
+    const res = await fetch("/register", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(serializeable),
+    })
+  }
+
+  async function asyncGetFn() {
+    // 1. rcr을 받아온다
+    const json = await (async () => {
+      const res = await fetch("/get_login_challenge", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+
+      return res.json();
+    })();
+
+    const rcr = json;
+
+    // challenge, id는 type 때문에 변환해줌
+    rcr.challenge = base64urlToUint8Array(rcr.challenge.value);
+    rcr.allowCredentials = rcr.allowCredentials.map((ac) => {
+      ac.id = base64urlToUint8Array(ac.id);
+      return ac;
+    })
+
+    console.log("rcr = ", rcr);
+
+    // 브라우저는 ccr을 받아서 navigator.credentials.create 호출해서 option으로 ccr 넣어서 다시 서버로 요청
+    const credential = await navigator.credentials.get({
+      publicKey: rcr
+    });
+
+    console.log("credential = ", credential);
+
+    const serializeable = {
+      credentialId: credential.id,
+      userHandle: bufferToBase64url(credential.response.userHandle),
+      authenticatorData: bufferToBase64url(credential.response.authenticatorData),
+      clientDataJSON: bufferToBase64url(credential.response.clientDataJSON),
+      signature: bufferToBase64url(credential.response.signature),
+    };
+
+    console.log("serializeable = ", serializeable);
+
+    const res = await fetch("/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(serializeable),
+    })
+  }
+
+  function bufferToBase64url(buffer) {
+
+    // modified from https://github.com/github/webauthn-json/blob/main/src/webauthn-json/base64url.ts
+
+    const byteView = new Uint8Array(buffer);
+    let str = "";
+    for (const charCode of byteView) {
+      str += String.fromCharCode(charCode);
+    }
+
+    // Binary string to base64
+    const base64String = btoa(str);
+
+    // Base64 to base64url
+    // We assume that the base64url string is well-formed.
+    const base64urlString = base64String.replace(/\+/g, "-").replace(
+      /\//g,
+      "_",
+    ).replace(/=/g, "");
+    return base64urlString;
+  }
+
+  function base64urlToUint8Array(str) {
+    return Uint8Array.from(atob(str.replace(/-/g, '+').replace(/_/g, '/').replace(/\s/g, '')), c => c.charCodeAt(0))
+  }
+
+</script>

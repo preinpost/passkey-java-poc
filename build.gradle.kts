@@ -28,7 +28,11 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.mybatis.spring.boot:mybatis-spring-boot-starter:3.0.3")
-    implementation("com.yubico:webauthn-server-core:2.5.0")
+
+    implementation("com.webauthn4j:webauthn4j-core:0.22.0.RELEASE")
+    implementation("com.webauthn4j:webauthn4j-metadata:0.22.0.RELEASE")
+    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:2.15.2")
+
     implementation("org.springframework.session:spring-session-jdbc")
     compileOnly("org.projectlombok:lombok")
     runtimeOnly("com.h2database:h2")
